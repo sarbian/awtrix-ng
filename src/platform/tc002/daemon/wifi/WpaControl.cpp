@@ -259,7 +259,9 @@ bool WpaControlSocket::receive(std::string& out) {
   if (fd_ < 0) return false;
   char buffer[8192];
   const ssize_t n = recv(fd_, buffer, sizeof buffer, MSG_DONTWAIT);
-  if (n <= 0) return false;
+  // A datagram socket has no end of file: 0 is a reply of zero length, which wpa_supplicant sends
+  // for a command whose answer is empty (STA-FIRST on an access point without stations).
+  if (n < 0) return false;
   out.assign(buffer, static_cast<std::size_t>(n));
   return true;
 }

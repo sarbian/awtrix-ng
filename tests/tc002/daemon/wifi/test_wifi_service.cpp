@@ -859,6 +859,30 @@ void testAccessPointFallbackWithoutAddress() {
   removeTree(root);
 }
 
+// wpa_supplicant 2.12 answers STA-FIRST on an empty access point with a reply of zero length, not
+// FAIL: the router retry must accept that, or a clock that fell back to its setup access point
+// never rejoins the stored network.
+void testEmptyStationInventoryRetriesRouter() {
+  const std::string root = makeRoot("ap-empty-inventory");
+  storeProfile(root, "Home");
+  Harness h(root, true);
+  h.system->interface = true;
+  h.system->stock = false;
+  auto network = h.state.network();
+  network.ipv4.clear();
+  h.state.setNetwork(network);
+  h.system->supplicant.status = "wpa_state=COMPLETED\nssid=Home\n";
+  h.system->supplicant.stationReply = "";
+  check(h.service->start(h.now), "start associated station without DHCP");
+  h.run(31000);
+  check(h.network().link == WifiLink::AccessPoint && h.system->supplicants.size() == 2,
+        "missing DHCP opens the setup access point");
+  h.run(62000);
+  check(h.system->supplicants.size() == 3 && h.network().link != WifiLink::AccessPoint,
+        "empty STA-FIRST reply sends the clock back to the stored network");
+  removeTree(root);
+}
+
 void testAccessPointWaitsForLatestCredentials() {
   const std::string root = makeRoot("ap-pending");
   Harness h(root, true);
@@ -1274,6 +1298,7 @@ int main() {
   testAccessPointFallbackAndRetry();
   testAccessPointNameAndReadiness();
   testAccessPointFallbackWithoutAddress();
+  testEmptyStationInventoryRetriesRouter();
   testAccessPointWaitsForLatestCredentials();
   testEraseCredentials();
   testAdbFailClosed();

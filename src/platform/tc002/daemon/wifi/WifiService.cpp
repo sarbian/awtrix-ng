@@ -323,6 +323,7 @@ void WifiService::linkTimers() {
     accessPointEmptyAt_ = -1;
     if (accessPoint_ && session_.attached() && link_ == WifiLink::AccessPoint && haveProfile_ &&
         applyProfileAt_ < 0 && !credentialsPending() && now_ - accessPointClientAt_ >= kAccessPointIdleMs) {
+      logEvent("setup access point has no clients; trying the saved network again");
       accessPoint_ = false;
       applyProfile();
       return;
@@ -667,7 +668,10 @@ void WifiService::handleReply(Pending kind, const std::string& reply) {
   if (kind == Pending::AccessPointClients) {
     if (accessPoint_ && session_.attached() && link_ == WifiLink::AccessPoint && haveProfile_ &&
         applyProfileAt_ < 0 && !credentialsPending() && now_ - accessPointClientAt_ >= kAccessPointIdleMs &&
-        reply == "FAIL\n") {
+        (reply.empty() || reply == "FAIL\n")) {
+      // wpa_supplicant 2.12 answers STA-FIRST on an access point without stations with an empty
+      // reply (hostapd_ctrl_iface_sta_mib() returns 0 for no station); FAIL comes only when no
+      // access point runs at all.
       accessPointEmptyAt_ = now_ + kProvisionReplyMs;
     }
     return;
